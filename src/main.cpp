@@ -17,7 +17,7 @@ struct Beam
 };
 
 Beam homeBeam = {16}; // Pin connected to home side break beam
-Beam awayBeam = {17}; // Pin connected to away side break beam
+Beam awayBeam = {5}; // Pin connected to away side break beam
 
 void webSocketEvent(WStype_t type, uint8_t *payload, size_t length)
 {
@@ -67,7 +67,7 @@ void debounceBeam(Beam * beam)
 
   bool state = digitalRead(beam->PIN);
 
-  Serial.println();
+  USE_SERIAL.println(timeGap > DEBOUNCE_TIME);
 
   if (timeGap > DEBOUNCE_TIME)
   {
@@ -122,5 +122,9 @@ void loop()
 {
   debounceBeam(&homeBeam);
   debounceBeam(&awayBeam);
+
+
+  if (homeBeam.currentState) socket.sendTXT("ADD_HOME");
+  if (awayBeam.currentState) socket.sendTXT("ADD_AWAY");
   socket.loop();
 }
