@@ -4,25 +4,20 @@
 
 const char *ssid = "therealslimshady";
 const char *password = "pleasestandup";
-char path[] = "/table/ws/test";
-char host[] = "api.fuseball.org";
 
 WebSocketsClient socket;
 
 #define USE_SERIAL Serial
+const int DEBOUNCE_TIME = 1000; // Debounce time in milliseconds
+struct Beam
+{
+  int PIN;
+  bool currentState = false;
+  int lastPushTime = 0;
+};
 
-// void hexdump(const void *mem, uint32_t len, uint8_t cols = 16) {
-// 	const uint8_t* src = (const uint8_t*) mem;
-// 	USE_SERIAL.printf("\n[HEXDUMP] Address: 0x%08X len: 0x%X (%d)", (ptrdiff_t)src, len, len);
-// 	for(uint32_t i = 0; i < len; i++) {
-// 		if(i % cols == 0) {
-// 			USE_SERIAL.printf("\n[0x%08X] 0x%08X: ", (ptrdiff_t)src, i);
-// 		}
-// 		USE_SERIAL.printf("%02X ", *src);
-// 		src++;
-// 	}
-// 	USE_SERIAL.printf("\n");
-// }
+Beam homeBeam = {16}; // Pin connected to home side break beam
+Beam awayBeam = {17}; // Pin connected to away side break beam
 
 void webSocketEvent(WStype_t type, uint8_t *payload, size_t length)
 {
@@ -65,11 +60,38 @@ void webSocketEvent(WStype_t type, uint8_t *payload, size_t length)
   }
 }
 
+void debounceBeam(Beam * beam)
+{
+  int now = millis();
+  int timeGap = now - beam->lastPushTime;
+
+  bool state = digitalRead(beam->PIN);
+
+  Serial.println();
+
+  if (timeGap > DEBOUNCE_TIME)
+  {
+    if (!state)
+    {
+      beam->currentState = true;
+    }
+    else
+    {
+      beam->currentState = false;
+    }
+  }
+
+  beam->lastPushTime = now;
+}
+
 void setup()
 {
+  pinMode(homeBeam.PIN, INPUT_PULLUP);
+  pinMode(awayBeam.PIN, INPUT_PULLUP);
+
   USE_SERIAL.begin(115200);
-  USE_SERIAL.println("hello setup");
-  USE_SERIAL.setDebugOutput(true);
+
+  USE_SERIAL.println("Start Setup");
 
   for (uint8_t t = 4; t > 0; t--)
   {
@@ -77,6 +99,7 @@ void setup()
     USE_SERIAL.flush();
     delay(1000);
   }
+  WiFi.mode(WIFI_AP);
 
   WiFi.begin(ssid, password);
 
@@ -92,13 +115,12 @@ void setup()
   socket.onEvent(webSocketEvent);
 
   // try ever 5000 again if connection has failed
-  // socket.setReconnectInterval(5000);
+  socket.setReconnectInterval(5000);
 }
 
 void loop()
 {
-  delay(1000);
-  USE_SERIAL.println("hello loop");
-  // socket.loop();
-  // put your main code here, to run repeatedly:
+  debounceBeam(&homeBeam);
+  debounceBeam(&awayBeam);
+  socket.loop();
 }
