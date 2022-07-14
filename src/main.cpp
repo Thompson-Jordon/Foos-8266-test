@@ -9,15 +9,21 @@ WebSocketsClient socket;
 
 #define USE_SERIAL Serial
 const int DEBOUNCE_TIME = 1000; // Debounce time in milliseconds
-struct Beam
-{
-  int PIN;
-  bool currentState = false;
-  int lastPushTime = 0;
-};
+// struct Beam
+// {
+//   int PIN;
+//   bool currentState = false;
+//   int lastPushTime = 0;
+// };
 
-Beam homeBeam = {16, false, millis()}; // Pin connected to home side break beam
-Beam awayBeam = {5, false, millis()}; // Pin connected to away side break beam
+// Beam homeBeam = {16, false, millis()}; // Pin connected to home side break beam
+// Beam awayBeam = {5, false, millis()}; // Pin connected to away side break beam
+int  homeBeam = 4;
+bool homeLastState = false;
+bool homeCurrentState;
+int  awayBeam = 5;
+bool awayLastState = false;
+bool awayCurrentState;
 
 void webSocketEvent(WStype_t type, uint8_t *payload, size_t length)
 {
@@ -60,35 +66,35 @@ void webSocketEvent(WStype_t type, uint8_t *payload, size_t length)
   }
 }
 
-bool debounceBeam(Beam * beam)
-{
-  int now = millis();
-  int timeGap = now - beam->lastPushTime;
+// bool debounceBeam(Beam * beam)
+// {
+//   int now = millis();
+//   int timeGap = now - beam->lastPushTime;
 
-  bool state = digitalRead(beam->PIN);
+//   bool state = digitalRead(beam->PIN);
 
-  // USE_SERIAL.println(timeGap > DEBOUNCE_TIME);
+//   // USE_SERIAL.println(timeGap > DEBOUNCE_TIME);
 
-  if (timeGap > DEBOUNCE_TIME)
-  {
-    if (!state)
-    {
-      beam->currentState = true;
-    }
-    else
-    {
-      beam->currentState = false;
-    }
-  }
+//   if (timeGap > DEBOUNCE_TIME)
+//   {
+//     if (!state)
+//     {
+//       beam->currentState = true;
+//     }
+//     else
+//     {
+//       beam->currentState = false;
+//     }
+//   }
 
-  beam->lastPushTime = now;
-  return beam->currentState;
-}
+//   beam->lastPushTime = now;
+//   return beam->currentState;
+// }
 
 void setup()
 {
-  pinMode(homeBeam.PIN, INPUT_PULLUP);
-  pinMode(awayBeam.PIN, INPUT_PULLUP);
+  pinMode(homeBeam, INPUT_PULLUP);
+  pinMode(awayBeam, INPUT_PULLUP);
 
   USE_SERIAL.begin(115200);
 
@@ -121,11 +127,16 @@ void setup()
 
 void loop()
 {
-  homeBeam.currentState = debounceBeam(&homeBeam);
-  awayBeam.currentState = debounceBeam(&awayBeam);
+  homeCurrentState = digitalRead(homeBeam);
+  awayCurrentState = digitalRead(awayBeam);
 
-
-  if (homeBeam.currentState) socket.sendTXT("ADD_HOME");
-  if (awayBeam.currentState) socket.sendTXT("ADD_AWAY");
+  if (homeLastState && !homeCurrentState)
+    socket.sendTXT("ADD_HOME");
+    // USE_SERIAL.println("ADD_HOME");
+  if (awayLastState && !awayCurrentState)
+    socket.sendTXT("ADD_AWAY");
+    // USE_SERIAL.println("ADD_AWAY");
+  homeLastState = homeCurrentState;
+  awayLastState = awayCurrentState;
   socket.loop();
 }
