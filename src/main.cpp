@@ -8,28 +8,25 @@ const char *password = "pleasestandup";
 WebSocketsClient socket;
 
 #define USE_SERIAL Serial
-const int DEBOUNCE_TIME = 1000; // Debounce time in milliseconds
-// struct Beam
-// {
-//   int PIN;
-//   bool currentState = false;
-//   int lastPushTime = 0;
-// };
+const int DEBOUNCE_DELAY = 1000; // Debounce time in milliseconds
 
-// Beam homeBeam = {16, false, millis()}; // Pin connected to home side break beam
-// Beam awayBeam = {5, false, millis()}; // Pin connected to away side break beam
-int  homeBeam = 4;
-bool homeLastState = false;
+// Home Team Vars
+int homeBeam = 4;
+bool homeLastSteadyState = false;
 bool homeCurrentState;
-int  awayBeam = 5;
-bool awayLastState = false;
+unsigned long homeLastDebounceTime = 0;
+
+// Away Team Vars
+int awayBeam = 5;
+bool awayLastSteadyState = false;
 bool awayCurrentState;
+unsigned long awayLastDebounceTime = 0;
 
 void webSocketEvent(WStype_t type, uint8_t *payload, size_t length)
 {
 
-  USE_SERIAL.println(length);
-  USE_SERIAL.println(type);
+  // USE_SERIAL.println(length);
+  // USE_SERIAL.println(type);
 
   switch (type)
   {
@@ -40,21 +37,10 @@ void webSocketEvent(WStype_t type, uint8_t *payload, size_t length)
     USE_SERIAL.printf("[WSc] Connected to url: %s\n", payload);
 
     // send message to server when Connected
-    socket.sendTXT("Connected");
+    // socket.sendTXT("Connected");
     break;
   case WStype_TEXT:
-    USE_SERIAL.printf("[WSc] get text: %s\n", payload);
-
-    // send message to server
-    // webSocket.sendTXT("message here");
-    break;
   case WStype_BIN:
-    USE_SERIAL.printf("[WSc] get binary length: %u\n", length);
-    // hexdump(payload, length);
-
-    // send data to server
-    // webSocket.sendBIN(payload, length)
-    break;
   case WStype_ERROR:
   case WStype_PING:
   case WStype_PONG:
@@ -65,31 +51,6 @@ void webSocketEvent(WStype_t type, uint8_t *payload, size_t length)
     break;
   }
 }
-
-// bool debounceBeam(Beam * beam)
-// {
-//   int now = millis();
-//   int timeGap = now - beam->lastPushTime;
-
-//   bool state = digitalRead(beam->PIN);
-
-//   // USE_SERIAL.println(timeGap > DEBOUNCE_TIME);
-
-//   if (timeGap > DEBOUNCE_TIME)
-//   {
-//     if (!state)
-//     {
-//       beam->currentState = true;
-//     }
-//     else
-//     {
-//       beam->currentState = false;
-//     }
-//   }
-
-//   beam->lastPushTime = now;
-//   return beam->currentState;
-// }
 
 void setup()
 {
@@ -116,7 +77,7 @@ void setup()
     delay(100);
   }
 
-  socket.begin("67.213.228.103", 8000, "/table/ws/Testing");
+  socket.begin("67.213.228.103", 8000, "/table/ws/16fb6ae6-403e-4035-93a3-574d7ee43eab");
 
   // event handler
   socket.onEvent(webSocketEvent);
@@ -125,18 +86,67 @@ void setup()
   socket.setReconnectInterval(5000);
 }
 
+void checkHomeBeam()
+{
+  // If the switch/button changed, due to noise or pressing:
+  // USE_SERIAL.println(homeCurrentState != homeLastFlickerableState);
+  if ((millis() - homeLastDebounceTime) > DEBOUNCE_DELAY)
+  { 
+    // whatever the reading is at, it's been there for longer than the debounce
+    // delay, so take it as the actual current state:
+
+    // Get beam current state
+    homeCurrentState = digitalRead(homeBeam);
+
+    // if the button state has changed:
+    if (homeLastSteadyState && !homeCurrentState)
+    {
+      USE_SERIAL.println("The beam is triggered");
+      socket.sendTXT("ADD_HOME");
+      USE_SERIAL.println("ADD_HOME");
+      homeLastDebounceTime = millis();
+    }
+    else if (!homeLastSteadyState && homeCurrentState)
+      USE_SERIAL.println("The beam is cleared");
+
+    // save the the last steady state
+    homeLastSteadyState = homeCurrentState;
+  }
+  return;
+}
+
+void checkAwayBeam()
+{
+  // Check to see if its been greater then the debounce time before checking to see if the button has been pressed
+  if ((millis() - awayLastDebounceTime) > DEBOUNCE_DELAY)
+  {
+    // whatever the reading is at, it's been there for longer than the debounce
+    // delay, so take it as the actual current state:
+
+    // Get beam current state
+    awayCurrentState = digitalRead(awayBeam);
+
+    // if the button state has changed:
+    if (awayLastSteadyState && !awayCurrentState)
+    {
+      USE_SERIAL.println("The beam is triggered");
+      socket.sendTXT("ADD_AWAY");
+      USE_SERIAL.println("ADD_AWAY");
+      awayLastDebounceTime = millis();
+    }
+    else if (!awayLastSteadyState && awayCurrentState)
+      USE_SERIAL.println("The beam is cleared");
+
+    // save the the last steady state
+    awayLastSteadyState = awayCurrentState;
+  }
+  return;
+}
+
 void loop()
 {
-  homeCurrentState = digitalRead(homeBeam);
-  awayCurrentState = digitalRead(awayBeam);
+  checkHomeBeam();
+  checkAwayBeam();
 
-  if (homeLastState && !homeCurrentState)
-    socket.sendTXT("ADD_HOME");
-    // USE_SERIAL.println("ADD_HOME");
-  if (awayLastState && !awayCurrentState)
-    socket.sendTXT("ADD_AWAY");
-    // USE_SERIAL.println("ADD_AWAY");
-  homeLastState = homeCurrentState;
-  awayLastState = awayCurrentState;
   socket.loop();
 }
