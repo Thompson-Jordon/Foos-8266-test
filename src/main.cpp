@@ -77,7 +77,7 @@ void setup()
     delay(100);
   }
 
-  socket.begin("67.213.228.103", 8000, "/table/ws/16fb6ae6-403e-4035-93a3-574d7ee43eab");
+  socket.begin("api.fuseball.win", 80, "/table/ws/16fb6ae6-403e-4035-93a3-574d7ee43eab");
 
   // event handler
   socket.onEvent(webSocketEvent);
